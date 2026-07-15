@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="Music.css">
+</head>
+
+<body>
+
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <clipPath id="heartClip" clipPathUnits="objectBoundingBox">
+                <path
+                    d="M0.5,0.85 C0.5,0.85 0.05,0.55 0.05,0.25 C0.05,0.05 0.25,0 0.4,0.05 C0.45,0.07 0.5,0.12 0.5,0.2 C0.5,0.12 0.55,0.07 0.6,0.05 C0.75,0 0.95,0.05 0.95,0.25 C0.95,0.55 0.5,0.85 0.5,0.85 Z" />
+            </clipPath>
+        </defs>
+    </svg>
+
+    <!-- ================= LOADER ================= -->
+    <div id="loaderScreen" class="screen loader-screen">
+        <div class="loader-heart">🦋💗</div>
+        <p class="loader-text">loading something special for you...</p>
+    </div>
+
+    <!-- ================= LOCK SCREEN ================= -->
+    <div id="lockScreen" class="screen lock-screen hidden">
+        <div class="lock-card">
+            <div class="lock-icon"><i class="fa-solid fa-lock"></i></div>
+            <h2>Enter the code</h2>
+            <p class="lock-sub">only you know this one 💗</p>
+
+            <div class="pin-row">
+                <input type="text" inputmode="numeric" maxlength="1" class="pin-box">
+                <input type="text" inputmode="numeric" maxlength="1" class="pin-box">
+                <input type="text" inputmode="numeric" maxlength="1" class="pin-box">
+                <input type="text" inputmode="numeric" maxlength="1" class="pin-box">
+            </div>
+
+            <p id="pinError" class="pin-error">Wrong code, try again 🥺</p>
+
+            <button id="hintBtn" class="hint-btn">wanna hint? 👀</button>
+            <p id="hintText" class="hint-text">Hint: the day we met 💗</p>
+        </div>
+    </div>
+
+    <!-- ================= CELEBRATION + POPUP ================= -->
+    <div id="celebration" class="screen celebration-screen hidden">
+        <div id="heartsContainer" class="hearts-container"></div>
+
+        <div id="popupMsg" class="popup-card">
+            <div class="popup-emoji">👀💋</div>
+            <p class="popup-text">
+                I made this player with every song that reminds me of you —
+                dedicated to your hotness and beauty. And in one playlist,
+                there are songs I dedicated just to you, to show how much
+                I love you... Zaalima 💗
+            </p>
+            <button id="enterPlayerBtn" class="popup-btn">Let's go 💕</button>
+        </div>
+    </div>
+
+    <!-- ================= PLAYER ================= -->
+    <div id="playerScreen" class="player-screen hidden">
+
+        <div id="bgGlow" class="bg-glow"></div>
+
+      
+
+        <button id="menuBtn" class="menu-btn" onclick="toggleSidebar()">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <div id="overlay" class="overlay" onclick="closeSidebar()"></div>
+
+        <div class="container">
+
+            <div class="sidebar" id="sidebar">
+
+                <h2>Playlists FOR YOu</h2>
+
+                <button onclick="showPlaylist('songs')">
+                    For Her🦋💕
+                </button>
+
+                <button onclick="showPlaylist('fromME')">
+                    From Me👀💋
+                </button>
+
+                <div id="playlist"></div>
+
+            </div>
+
+            <div class="musicplayer">
+
+                <div class="circle" id="circle">
+                    <img id="cover" src="./images/1.jpg">
+                </div>
+
+                <h2 id="title"></h2>
+
+                <p id="msg"></p>
+
+                <audio id="song"></audio>
+
+                <input type="range" id="progress">
+
+                <div class="controls">
+
+                    <i class="fa-solid fa-backward-step" onclick="prevSong()"></i>
+
+                    <div id="playBtn">
+                        <i id="playIcon" class="fa-solid fa-play"></i>
+                    </div>
+
+                    <i class="fa-solid fa-forward-step" onclick="nextSong()"></i>
+
+                </div>
+
+                <a id="downloadBtn" class="download-btn" href="#" download>
+                    download
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Music.js is expected to define the `songs` and `fromME` data arrays -->
+    <script src="./Music.js"></script>
+
+    <script>
+
+        // ===== Intro / Lock / Celebration flow =====
+
+        const loaderScreen = document.getElementById("loaderScreen");
+        const lockScreen = document.getElementById("lockScreen");
+        const playerScreen = document.getElementById("playerScreen");
+        const celebration = document.getElementById("celebration");
+        const popupMsg = document.getElementById("popupMsg");
+        const pinInputs = document.querySelectorAll(".pin-box");
+        const pinError = document.getElementById("pinError");
+        const hintBtn = document.getElementById("hintBtn");
+        const hintText = document.getElementById("hintText");
+        const lockCard = document.querySelector(".lock-card");
+        const heartsContainer = document.getElementById("heartsContainer");
+        const enterPlayerBtn = document.getElementById("enterPlayerBtn");
+
+        const CORRECT_PIN = "2224";
+
+        window.addEventListener("load", () => {
+            setTimeout(() => {
+                loaderScreen.classList.add("fade-out");
+                setTimeout(() => {
+                    loaderScreen.classList.add("hidden");
+                    lockScreen.classList.remove("hidden");
+                    pinInputs[0].focus();
+                }, 500);
+            }, 2000);
+        });
+
+        hintBtn.onclick = function () {
+            hintText.classList.toggle("show");
+        };
+
+        pinInputs.forEach((input, idx) => {
+            input.addEventListener("input", () => {
+                input.value = input.value.replace(/[^0-9]/g, "").slice(0, 1);
+
+                if (input.value && idx < pinInputs.length - 1) {
+                    pinInputs[idx + 1].focus();
+                }
+
+                if ([...pinInputs].every(i => i.value)) {
+                    checkPin();
+                }
+            });
+
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Backspace" && !input.value && idx > 0) {
+                    pinInputs[idx - 1].focus();
+                }
+            });
+        });
+
+        function checkPin() {
+            const entered = [...pinInputs].map(i => i.value).join("");
+
+            if (entered === CORRECT_PIN) {
+                unlockPlayer();
+            } else {
+                pinError.classList.add("show");
+                lockCard.classList.add("shake");
+
+                setTimeout(() => {
+                    lockCard.classList.remove("shake");
+                    pinInputs.forEach(i => i.value = "");
+                    pinInputs[0].focus();
+                }, 500);
+            }
+        }
+
+        function unlockPlayer() {
+            pinError.classList.remove("show");
+            lockScreen.classList.add("hidden");
+            celebration.classList.remove("hidden");
+            startHearts();
+
+            setTimeout(() => {
+                popupMsg.classList.add("show");
+            }, 500);
+        }
+
+        function startHearts() {
+            const emojis = ["💗", "💖", "💕", "❤️", "💞"];
+            let count = 0;
+
+            const interval = setInterval(() => {
+                const heart = document.createElement("span");
+                heart.className = "falling-heart";
+                heart.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                heart.style.left = Math.random() * 100 + "vw";
+                heart.style.fontSize = (16 + Math.random() * 20) + "px";
+                heart.style.animationDuration = (2.5 + Math.random() * 2) + "s";
+
+                heartsContainer.appendChild(heart);
+
+                setTimeout(() => heart.remove(), 5500);
+
+                count++;
+                if (count > 50) clearInterval(interval);
+            }, 100);
+        }
+
+        enterPlayerBtn.onclick = function () {
+            popupMsg.classList.remove("show");
+            celebration.classList.add("fade-out");
+
+            setTimeout(() => {
+                celebration.classList.add("hidden");
+                celebration.classList.remove("fade-out");
+                playerScreen.classList.remove("hidden");
+            }, 500);
+        };
+
+        // ===== Music player logic =====
+
+        const song = document.getElementById("song");
+        const cover = document.getElementById("cover");
+        const title = document.getElementById("title");
+        const msg = document.getElementById("msg");
+        const progress = document.getElementById("progress");
+        const playBtn = document.getElementById("playBtn");
+        const playIcon = document.getElementById("playIcon");
+        const playlist = document.getElementById("playlist");
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("overlay");
+        const circle = document.getElementById("circle");
+        const bgGlow = document.getElementById("bgGlow");
+        const downloadBtn = document.getElementById("downloadBtn");
+
+        let currentPlaylist = songs;
+        let currentSong = 0;
+
+        function updateBackgroundGlow(imageSrc) {
+            bgGlow.style.opacity = 0;
+            setTimeout(() => {
+                bgGlow.style.backgroundImage = `url("${imageSrc}")`;
+                bgGlow.style.opacity = 1;
+            }, 300);
+        }
+
+        function toggleSidebar() {
+            sidebar.classList.toggle("active");
+            overlay.classList.toggle("active");
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove("active");
+            overlay.classList.remove("active");
+        }
+
+        function loadSong(index) {
+            currentSong = index;
+
+            const s = currentPlaylist[index];
+
+            song.src = s.src;
+            cover.src = s.image;
+            title.innerHTML = s.title;
+            msg.innerHTML = s.msg;
+
+            song.load();
+            song.play();
+
+            playIcon.classList.remove("fa-play");
+            playIcon.classList.add("fa-pause");
+
+            updateBackgroundGlow(s.image);
+
+            downloadBtn.href = s.src;
+            downloadBtn.setAttribute("download", s.title);
+
+            // song-change effect: restart animation on cover + title
+            circle.classList.remove("song-pop");
+            title.classList.remove("song-pop");
+            void circle.offsetWidth; // force reflow so animation replays
+            circle.classList.add("song-pop");
+            title.classList.add("song-pop");
+
+            highlightActiveSong(index);
+            closeSidebar();
+        }
+
+        function highlightActiveSong(index) {
+            const items = playlist.querySelectorAll(".song");
+            items.forEach((item, i) => {
+                item.classList.toggle("active-song", i === index);
+            });
+        }
+
+        function nextSong() {
+            currentSong++;
+
+            if (currentSong >= currentPlaylist.length) {
+                currentSong = 0;
+            }
+
+            loadSong(currentSong);
+        }
+
+        function prevSong() {
+            currentSong--;
+
+            if (currentSong < 0) {
+                currentSong = currentPlaylist.length - 1;
+            }
+
+            loadSong(currentSong);
+        }
+
+        playBtn.onclick = function () {
+            if (song.paused) {
+                song.play();
+                playIcon.classList.remove("fa-play");
+                playIcon.classList.add("fa-pause");
+            } else {
+                song.pause();
+                playIcon.classList.remove("fa-pause");
+                playIcon.classList.add("fa-play");
+            }
+        };
+
+        song.onloadedmetadata = function () {
+            progress.max = song.duration;
+            progress.value = song.currentTime;
+        };
+
+        song.ontimeupdate = function () {
+            progress.value = song.currentTime;
+        };
+
+        progress.oninput = function () {
+            song.currentTime = progress.value;
+        };
+
+        function displaySongs() {
+            playlist.innerHTML = "";
+
+            currentPlaylist.forEach((item, index) => {
+                playlist.innerHTML += `
+                    <div class="song" onclick="loadSong(${index})">
+                        <span class="song-title">🦋 ${item.title}</span>
+                        <a class="song-download" href="${item.src}" download="${item.title}" onclick="event.stopPropagation()" title="Download">
+                            <i class="fa-solid fa-download"></i>
+                        </a>
+                    </div>
+                `;
+            });
+        }
+
+        function showPlaylist(type) {
+            currentPlaylist = (type === "songs") ? songs : fromME;
+            displaySongs();
+            loadSong(0);
+        }
+
+        showPlaylist("songs");
+
+    </script>
+
+</body>
+
+</html>
