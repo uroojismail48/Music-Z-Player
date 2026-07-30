@@ -23,8 +23,13 @@
 
     <!-- ================= LOADER ================= -->
     <div id="loaderScreen" class="screen loader-screen">
-        <div class="loader-heart">🦋💗</div>
-        <p class="loader-text">loading something special for you...</p>
+        <div class="loader-ring">
+            <div class="loader-core"><i class="fa-solid fa-heart"></i></div>
+        </div>
+        <div class="loader-bars">
+            <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <p class="loader-text">loading something special for you<span class="loader-dots"><span>.</span><span>.</span><span>.</span></span></p>
     </div>
 
     <!-- ================= LOCK SCREEN ================= -->
@@ -69,8 +74,6 @@
 
         <div id="bgGlow" class="bg-glow"></div>
 
-      
-
         <button id="menuBtn" class="menu-btn" onclick="toggleSidebar()">
             <i class="fa-solid fa-bars"></i>
         </button>
@@ -83,13 +86,16 @@
 
                 <h2>Playlists FOR YOu</h2>
 
-                <button onclick="showPlaylist('songs')">
-                    For Her🦋💕
-                </button>
+                <div class="sidebar-tabs">
+                    <button id="tabSongs" class="active-tab" onclick="showPlaylist('songs')">For Her 🦋</button>
+                    <button id="tabFromMe" onclick="showPlaylist('fromME')">From Me 💋</button>
+                    <button id="tabLiked" onclick="showPlaylist('liked')">Liked ❤️</button>
+                </div>
 
-                <button onclick="showPlaylist('fromME')">
-                    From Me👀💋
-                </button>
+                <div class="search-wrap">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchInput" placeholder="search a song...">
+                </div>
 
                 <div id="playlist"></div>
 
@@ -97,37 +103,57 @@
 
             <div class="musicplayer">
 
-                <div class="circle" id="circle">
-                    <img id="cover" src="./images/1.jpg">
-                </div>
+                <div class="player-card">
 
-                <h2 id="title"></h2>
-
-                <p id="msg"></p>
-
-                <audio id="song"></audio>
-
-                <input type="range" id="progress">
-
-                <div class="controls">
-
-                    <i class="fa-solid fa-backward-step" onclick="prevSong()"></i>
-
-                    <div id="playBtn">
-                        <i id="playIcon" class="fa-solid fa-play"></i>
+                    <div class="circle" id="circle">
+                        <img id="cover" src="./images/1.jpg">
                     </div>
 
-                    <i class="fa-solid fa-forward-step" onclick="nextSong()"></i>
+                    <h2 id="title"></h2>
+
+                    <p id="msg"></p>
+
+                    <audio id="song"></audio>
+
+                    <div class="progress-row">
+                        <span id="currentTime" class="time-label">0:00</span>
+                        <input type="range" id="progress" value="0">
+                        <span id="durationTime" class="time-label">0:00</span>
+                    </div>
+
+                    <div class="controls">
+
+                        <i class="fa-solid fa-shuffle" id="shuffleBtn" title="Shuffle" onclick="toggleShuffle()"></i>
+                        <i class="fa-solid fa-backward-step" onclick="prevSong()"></i>
+
+                        <div id="playBtn">
+                            <i id="playIcon" class="fa-solid fa-play"></i>
+                        </div>
+
+                        <i class="fa-solid fa-forward-step" onclick="nextSong()"></i>
+                        <i class="fa-solid fa-repeat" id="repeatBtn" title="Repeat" onclick="toggleRepeat()"></i>
+
+                    </div>
+
+                    <div class="volume-row">
+                        <i class="fa-solid fa-volume-low"></i>
+                        <input type="range" id="volume" min="0" max="1" step="0.01" value="1">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </div>
+
+                    <a id="downloadBtn" class="download-btn" href="#" download>
+                        <i class="fa-solid fa-download"></i> download
+                    </a>
+
+                    <p class="kbd-hint">space = play/pause &nbsp;•&nbsp; ← / → = prev/next</p>
 
                 </div>
-
-                <a id="downloadBtn" class="download-btn" href="#" download>
-                    download
-                </a>
 
             </div>
 
         </div>
+
+        <div id="toast" class="toast"></div>
 
     </div>
 
@@ -255,6 +281,8 @@
         const title = document.getElementById("title");
         const msg = document.getElementById("msg");
         const progress = document.getElementById("progress");
+        const currentTimeEl = document.getElementById("currentTime");
+        const durationTimeEl = document.getElementById("durationTime");
         const playBtn = document.getElementById("playBtn");
         const playIcon = document.getElementById("playIcon");
         const playlist = document.getElementById("playlist");
@@ -263,9 +291,53 @@
         const circle = document.getElementById("circle");
         const bgGlow = document.getElementById("bgGlow");
         const downloadBtn = document.getElementById("downloadBtn");
+        const volumeSlider = document.getElementById("volume");
+        const shuffleBtn = document.getElementById("shuffleBtn");
+        const repeatBtn = document.getElementById("repeatBtn");
+        const searchInput = document.getElementById("searchInput");
+        const toast = document.getElementById("toast");
+        const tabButtons = {
+            songs: document.getElementById("tabSongs"),
+            fromME: document.getElementById("tabFromMe"),
+            liked: document.getElementById("tabLiked")
+        };
 
+        // give every song a stable id so likes/search survive playlist switches
+        function tagSongs(list, sourceName) {
+            list.forEach((s, i) => {
+                if (!s._id) s._id = sourceName + "-" + i;
+            });
+        }
+        tagSongs(songs, "songs");
+        tagSongs(fromME, "fromME");
+
+        const allSongs = [...songs, ...fromME];
+
+        let likedIds = new Set(JSON.parse(localStorage.getItem("likedSongIds") || "[]"));
+        let currentTab = "songs";
         let currentPlaylist = songs;
+        let displayedPlaylist = songs;
         let currentSong = 0;
+        let isShuffle = false;
+        let repeatMode = "off"; // off -> all -> one -> off
+
+        function saveLikes() {
+            localStorage.setItem("likedSongIds", JSON.stringify([...likedIds]));
+        }
+
+        function showToast(text) {
+            toast.textContent = text;
+            toast.classList.add("show");
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
+        }
+
+        function formatTime(sec) {
+            if (!isFinite(sec) || isNaN(sec)) return "0:00";
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60).toString().padStart(2, "0");
+            return `${m}:${s}`;
+        }
 
         function updateBackgroundGlow(imageSrc) {
             bgGlow.style.opacity = 0;
@@ -288,7 +360,8 @@
         function loadSong(index) {
             currentSong = index;
 
-            const s = currentPlaylist[index];
+            const s = displayedPlaylist[index];
+            if (!s) return;
 
             song.src = s.src;
             cover.src = s.image;
@@ -314,7 +387,6 @@
             title.classList.add("song-pop");
 
             highlightActiveSong(index);
-            closeSidebar();
         }
 
         function highlightActiveSong(index) {
@@ -324,25 +396,49 @@
             });
         }
 
-        function nextSong() {
-            currentSong++;
-
-            if (currentSong >= currentPlaylist.length) {
-                currentSong = 0;
+        function getNextIndex() {
+            if (isShuffle && displayedPlaylist.length > 1) {
+                let next;
+                do {
+                    next = Math.floor(Math.random() * displayedPlaylist.length);
+                } while (next === currentSong);
+                return next;
             }
+            return (currentSong + 1) % displayedPlaylist.length;
+        }
 
-            loadSong(currentSong);
+        function getPrevIndex() {
+            if (isShuffle && displayedPlaylist.length > 1) {
+                return getNextIndex();
+            }
+            return (currentSong - 1 + displayedPlaylist.length) % displayedPlaylist.length;
+        }
+
+        function nextSong() {
+            if (!displayedPlaylist.length) return;
+            loadSong(getNextIndex());
         }
 
         function prevSong() {
-            currentSong--;
-
-            if (currentSong < 0) {
-                currentSong = currentPlaylist.length - 1;
-            }
-
-            loadSong(currentSong);
+            if (!displayedPlaylist.length) return;
+            loadSong(getPrevIndex());
         }
+
+        song.addEventListener("ended", () => {
+            if (repeatMode === "one") {
+                song.currentTime = 0;
+                song.play();
+                return;
+            }
+            if (!displayedPlaylist.length) return;
+            const isLast = currentSong === displayedPlaylist.length - 1;
+            if (isLast && repeatMode === "off" && !isShuffle) {
+                playIcon.classList.remove("fa-pause");
+                playIcon.classList.add("fa-play");
+                return;
+            }
+            nextSong();
+        });
 
         playBtn.onclick = function () {
             if (song.paused) {
@@ -359,36 +455,131 @@
         song.onloadedmetadata = function () {
             progress.max = song.duration;
             progress.value = song.currentTime;
+            durationTimeEl.textContent = formatTime(song.duration);
         };
 
         song.ontimeupdate = function () {
             progress.value = song.currentTime;
+            currentTimeEl.textContent = formatTime(song.currentTime);
         };
 
         progress.oninput = function () {
             song.currentTime = progress.value;
         };
 
-        function displaySongs() {
+        volumeSlider.oninput = function () {
+            song.volume = volumeSlider.value;
+        };
+
+        function toggleShuffle() {
+            isShuffle = !isShuffle;
+            shuffleBtn.classList.toggle("toggled", isShuffle);
+            showToast(isShuffle ? "Shuffle on 🔀" : "Shuffle off");
+        }
+
+        function toggleRepeat() {
+            if (repeatMode === "off") repeatMode = "all";
+            else if (repeatMode === "all") repeatMode = "one";
+            else repeatMode = "off";
+
+            repeatBtn.classList.toggle("toggled", repeatMode !== "off");
+            repeatBtn.title = repeatMode === "one" ? "Repeat: one song" :
+                repeatMode === "all" ? "Repeat: all" : "Repeat: off";
+            showToast(
+                repeatMode === "one" ? "Repeating this song 🔁" :
+                repeatMode === "all" ? "Repeating playlist 🔁" : "Repeat off"
+            );
+        }
+
+        function toggleLike(id, e) {
+            e.stopPropagation();
+            if (likedIds.has(id)) {
+                likedIds.delete(id);
+            } else {
+                likedIds.add(id);
+                showToast("Added to Liked ❤️");
+            }
+            saveLikes();
+            renderPlaylist();
+        }
+
+        function renderPlaylist() {
+            const query = searchInput.value.trim().toLowerCase();
+
+            let base;
+            if (currentTab === "liked") {
+                base = allSongs.filter(s => likedIds.has(s._id));
+            } else {
+                base = currentPlaylist;
+            }
+
+            displayedPlaylist = query
+                ? base.filter(s => s.title.toLowerCase().includes(query))
+                : base;
+
             playlist.innerHTML = "";
 
-            currentPlaylist.forEach((item, index) => {
-                playlist.innerHTML += `
-                    <div class="song" onclick="loadSong(${index})">
-                        <span class="song-title">🦋 ${item.title}</span>
-                        <a class="song-download" href="${item.src}" download="${item.title}" onclick="event.stopPropagation()" title="Download">
+            if (!displayedPlaylist.length) {
+                playlist.innerHTML = `<p class="empty-note">${
+                    currentTab === "liked" ? "no liked songs yet 🤍 tap the heart on any song" : "no songs found"
+                }</p>`;
+                return;
+            }
+
+            displayedPlaylist.forEach((item, index) => {
+                const isLiked = likedIds.has(item._id);
+                const div = document.createElement("div");
+                div.className = "song";
+                div.onclick = () => loadSong(index);
+                div.innerHTML = `
+                    <span class="song-title">🦋 ${item.title}</span>
+                    <span class="song-actions">
+                        <i class="fa-solid fa-heart song-like ${isLiked ? "liked" : ""}" title="Like"></i>
+                        <a class="song-download" href="${item.src}" download="${item.title}" title="Download">
                             <i class="fa-solid fa-download"></i>
                         </a>
-                    </div>
+                    </span>
                 `;
+                div.querySelector(".song-like").addEventListener("click", (e) => toggleLike(item._id, e));
+                div.querySelector(".song-download").addEventListener("click", (e) => e.stopPropagation());
+                playlist.appendChild(div);
             });
+
+            highlightActiveSong(currentSong);
         }
 
         function showPlaylist(type) {
-            currentPlaylist = (type === "songs") ? songs : fromME;
-            displaySongs();
-            loadSong(0);
+            currentTab = type;
+
+            Object.values(tabButtons).forEach(btn => btn.classList.remove("active-tab"));
+            tabButtons[type].classList.add("active-tab");
+
+            currentPlaylist = type === "songs" ? songs : type === "fromME" ? fromME : [];
+
+            renderPlaylist();
+
+            if (displayedPlaylist.length) {
+                loadSong(0);
+            }
+
+            closeSidebar();
         }
+
+        searchInput.addEventListener("input", renderPlaylist);
+
+        document.addEventListener("keydown", (e) => {
+            if (playerScreen.classList.contains("hidden")) return;
+            if (document.activeElement === searchInput) return;
+
+            if (e.code === "Space") {
+                e.preventDefault();
+                playBtn.onclick();
+            } else if (e.code === "ArrowRight") {
+                nextSong();
+            } else if (e.code === "ArrowLeft") {
+                prevSong();
+            }
+        });
 
         showPlaylist("songs");
 
